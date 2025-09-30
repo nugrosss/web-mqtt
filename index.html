@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard MQTT - Monitoring Suhu & Kelembaban</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .config-section {
+            display: none;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+
+        .config-section.active {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-left: 5px solid;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card.temp {
+            border-left-color: #ef4444;
+        }
+
+        .stat-card.humidity {
+            border-left-color: #3b82f6;
+        }
+
+        .stat-card.lamp {
+            border-left-color: #fbbf24;
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .stat-icon {
+            font-size: 2.5rem;
+        }
+
+        .stat-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+
+        .stat-topic {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #fbbf24;
+            color: #333;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+        }
+
+        .alert {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 80px 20px;
+            color: #999;
+        }
+
+        .no-data-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .info-panel {
+            background: #e0e7ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 25px;
+        }
+
+        .info-panel h3 {
+            color: #3730a3;
+            margin-bottom: 10px;
+        }
+
+        .info-panel ul {
+            color: #4c1d95;
+            padding-left: 20px;
+        }
+
+        .info-panel li {
+            margin: 8px 0;
+        }
+
+        .info-panel code {
+            background: #c7d2fe;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .toggle-btn:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .alert-container {
+                left: 20px;
+                right: 20px;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="alert-container" id="alertContainer"></div>
+
+    <div class="container">
+        <h1>🌡️ Dashboard MQTT</h1>
+        <p class="subtitle">Monitoring Suhu & Kelembaban Real-Time</p>
+
+        <!-- MQTT Connection Card -->
+        <div class="card">
+            <div class="card-title">
+                <span>Koneksi MQTT</span>
+                <span id="connectionStatus" class="status-badge status-disconnected">
+                    ⚠️ Terputus
+                </span>
+                <button class="toggle-btn" onclick="toggleConfig()">Konfigurasi</button>
+            </div>
+
+            <div id="configSection" class="config-section">
+                <div class="form-group">
+                    <label>Broker URL</label>
+                    <input type="text" id="brokerUrl" value="192.168.131.114">
+                </div>
+                <div class="form-group">
+                    <label>Port</label>
+                    <input type="text" id="brokerPort" value="9001">
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="brokerUser" placeholder="firos">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="brokerPass" placeholder="firos">
+                </div>
+                <div class="form-group">
+                    <label>Topik Suhu</label>
+                    <input type="text" id="topicTemp" value="sensor/suhu">
+                </div>
+                <div class="form-group">
+                    <label>Topik Kelembaban</label>
+                    <input type="text" id="topicHumidity" value="sensor/kelembaban">
+                </div>
+                <div class="form-group">
+                    <label>Topik Lampu</label>
+                    <input type="text" id="topicLamp" value="device/lampu">
+                </div>
+                <button onclick="connectMQTT()">🔌 Connect</button>
+            </div>
+
+
+            <div class="btn-group" style="margin-top: 15px;">
+                <button class="btn btn-success" id="connectBtn" onclick="connectMQTT()">
+                    🔌 Connect ke Broker
+                </button>
+                <button class="btn btn-danger" id="disconnectBtn" onclick="disconnectMQTT()" style="display: none;">
+                    🔌 Disconnect
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card temp">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-label">Suhu Saat Ini</div>
+                        <div class="stat-value" id="tempValue">0°C</div>
+                        <div class="stat-topic" id="tempTopic">Topik: sensor/suhu</div>
+                    </div>
+                    <div class="stat-icon">🌡️</div>
+                </div>
+            </div>
+
+            <div class="stat-card humidity">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-label">Kelembaban Saat Ini</div>
+                        <div class="stat-value" id="humidityValue">0%</div>
+                        <div class="stat-topic" id="humidityTopic">Topik: sensor/kelembaban</div>
+                    </div>
+                    <div class="stat-icon">💧</div>
+                </div>
+            </div>
+
+            <div class="stat-card lamp">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-label">Status Lampu</div>
+                        <div class="stat-value" id="lampValue" style="font-size: 2rem;">Mati</div>
+                        <div class="stat-topic" id="lampTopic">Topik: device/lampu</div>
+                    </div>
+                    <div class="stat-icon" id="lampIcon">💡</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="card">
+            <div class="card-title">🎮 Kontrol Device</div>
+            <div class="btn-group">
+                <button class="btn btn-warning" id="lampBtn" onclick="toggleLamp()" disabled>
+                    💡 Nyalakan Lampu
+                </button>
+                <button class="btn btn-info" id="notifBtn" onclick="toggleNotification()">
+                    🔔 Notifikasi Aktif
+                </button>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card">
+            <div class="card-title">📊 Grafik Real-Time</div>
+            <div id="noDataMessage" class="no-data">
+                <div class="no-data-icon">📡</div>
+                <p>Tidak ada data. Hubungkan ke MQTT broker untuk mulai monitoring.</p>
+            </div>
+            <div class="chart-container" id="chartContainer" style="display: none;">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="info-panel">
+            <h3>📡 Informasi MQTT</h3>
+            <ul>
+                <li>Dashboard ini menggunakan protokol MQTT untuk komunikasi real-time</li>
+                <li>Data suhu dan kelembaban diterima dari topik yang dikonfigurasi</li>
+                <li>Kontrol lampu mengirim perintah via MQTT publish</li>
+                <li>Menggunakan library <code>paho-mqtt</code> untuk koneksi WebSocket</li>
+                <li>Broker gratis: HiveMQ, Eclipse Mosquitto, EMQX</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let mqttClient = null;
+        let isConnected = false;
+        let lampStatus = false;
+        let notificationEnabled = true;
+        let chartData = {
+            labels: [],
+            temps: [],
+            humidities: []
+        };
+        let myChart = null;
+
+        // Fungsi untuk toggle konfigurasi
+        function toggleConfig() {
+            const configSection = document.getElementById('configSection');
+            configSection.classList.toggle('active');
+        }
+
+        // Fungsi untuk menampilkan alert
+        function showAlert(message) {
+            const alertContainer = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = 'alert';
+            alert.textContent = message;
+            alertContainer.appendChild(alert);
+
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // Fungsi untuk connect ke MQTT
+        function connectMQTT() {
+            const brokerUrl = document.getElementById('brokerUrl').value;
+            const brokerPort = document.getElementById('brokerPort').value;
+            const username   = document.getElementById('brokerUser').value;
+            const password   = document.getElementById('brokerPass').value;
+            const clientId   = 'mqtt_dashboard_' + Math.random().toString(16).substr(2, 8);
+
+            showAlert('🔄 Mencoba koneksi ke MQTT broker...');
+
+            try {
+                mqttClient = new Paho.MQTT.Client(brokerUrl, Number(brokerPort), clientId);
+
+                mqttClient.onConnectionLost = onConnectionLost;
+                mqttClient.onMessageArrived = onMessageArrived;
+
+                mqttClient.connect({
+                    onSuccess: onConnect,
+                    onFailure: onFailure,
+                    userName: username || undefined,  // ✅ pakai username kalau ada
+                    password: password || undefined,  // ✅ pakai password kalau ada
+                    useSSL: false                     // ganti true kalau broker pakai wss
+                });
+            } catch (error) {
+                showAlert('❌ Error: ' + error.message);
+            }
+        }
+
+
+
+        function onConnect() {
+            isConnected = true;
+            showAlert('✅ Terhubung ke MQTT broker!');
+            
+            document.getElementById('connectionStatus').className = 'status-badge status-connected';
+            document.getElementById('connectionStatus').textContent = '✅ Terhubung';
+            document.getElementById('connectBtn').style.display = 'none';
+            document.getElementById('disconnectBtn').style.display = 'inline-flex';
+            document.getElementById('lampBtn').disabled = false;
+
+            // Subscribe ke topik
+            const topicTemp = document.getElementById('topicTemp').value;
+            const topicHumidity = document.getElementById('topicHumidity').value;
+
+            mqttClient.subscribe(topicTemp);
+            mqttClient.subscribe(topicHumidity);
+            
+            showAlert('📥 Subscribed ke topik sensor');
+        }
+        function onFailure(error) {
+            showAlert('❌ Gagal terhubung: ' + error.errorMessage);
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                showAlert('⚠️ Koneksi terputus: ' + responseObject.errorMessage);
+                resetConnection();
+            }
+        }
+
+        function onMessageArrived(message) {
+            const topic = message.destinationName;
+            const payload = message.payloadString;
+            
+            const topicTemp = document.getElementById('topicTemp').value;
+            const topicHumidity = document.getElementById('topicHumidity').value;
+
+            if (topic === topicTemp) {
+                const temp = parseFloat(payload);
+                updateTemperature(temp);
+                addDataPoint(temp, null);   // ✅ tambahkan ke grafik
+            } else if (topic === topicHumidity) {
+                const humidity = parseFloat(payload);
+                updateHumidity(humidity);
+                addDataPoint(null, humidity); // ✅ tambahkan ke grafik
+            }
+        }
+
+
+        function disconnectMQTT() {
+            if (mqttClient && isConnected) {
+                mqttClient.disconnect();
+                resetConnection();
+                showAlert('🔌 Terputus dari MQTT broker');
+            }
+        }
+
+        function resetConnection() {
+            isConnected = false;
+            document.getElementById('connectionStatus').className = 'status-badge status-disconnected';
+            document.getElementById('connectionStatus').textContent = '⚠️ Terputus';
+            document.getElementById('connectBtn').style.display = 'inline-flex';
+            document.getElementById('disconnectBtn').style.display = 'none';
+            document.getElementById('lampBtn').disabled = true;
+        }
+
+        function updateTemperature(temp) {
+            document.getElementById('tempValue').textContent = temp.toFixed(1) + '°C';
+            
+            if (notificationEnabled && temp > 32) {
+                showAlert('⚠️ Suhu tinggi terdeteksi: ' + temp.toFixed(1) + '°C');
+            }
+        }
+
+        function updateHumidity(humidity) {
+            document.getElementById('humidityValue').textContent = humidity.toFixed(1) + '%';
+            
+            if (notificationEnabled && humidity < 40) {
+                showAlert('⚠️ Kelembaban rendah: ' + humidity.toFixed(1) + '%');
+            }
+        }
+
+        function toggleLamp() {
+            if (!isConnected) {
+                showAlert('❌ Tidak terhubung ke MQTT broker!');
+                return;
+            }
+
+            lampStatus = !lampStatus;
+            const status = lampStatus ? 'ON' : 'OFF';
+            const topicLamp = document.getElementById('topicLamp').value;
+
+            const message = new Paho.MQTT.Message(JSON.stringify({ status: status }));
+            message.destinationName = topicLamp;
+            mqttClient.send(message);
+
+            document.getElementById('lampValue').textContent = lampStatus ? 'Menyala' : 'Mati';
+            document.getElementById('lampIcon').textContent = lampStatus ? '💡' : '🔦';
+            document.getElementById('lampBtn').textContent = lampStatus ? '💡 Matikan Lampu' : '💡 Nyalakan Lampu';
+            document.getElementById('lampBtn').className = lampStatus ? 'btn btn-warning' : 'btn btn-secondary';
+
+            showAlert(lampStatus ? '💡 Lampu dinyalakan' : '💡 Lampu dimatikan');
+        }
+
+        function toggleNotification() {
+            notificationEnabled = !notificationEnabled;
+            document.getElementById('notifBtn').textContent = notificationEnabled ? '🔔 Notifikasi Aktif' : '🔕 Notifikasi Nonaktif';
+            document.getElementById('notifBtn').className = notificationEnabled ? 'btn btn-info' : 'btn btn-danger';
+        }
+
+        function addDataPoint(temp, humidity) {
+            const now = new Date();
+            const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+            chartData.labels.push(time);
+
+            // Jika data suhu ada
+            if (temp !== null) {
+                chartData.temps.push(temp);
+            } else {
+                chartData.temps.push(chartData.temps.length ? chartData.temps[chartData.temps.length - 1] : 0);
+            }
+
+            // Jika data kelembaban ada
+            if (humidity !== null) {
+                chartData.humidities.push(humidity);
+            } else {
+                chartData.humidities.push(chartData.humidities.length ? chartData.humidities[chartData.humidities.length - 1] : 0);
+            }
+
+            if (chartData.labels.length > 15) {
+                chartData.labels.shift();
+                chartData.temps.shift();
+                chartData.humidities.shift();
+            }
+
+            updateChart();
+        }
+
+        function updateChart() {
+            if (chartData.labels.length === 0) return;
+
+            document.getElementById('noDataMessage').style.display = 'none';
+            document.getElementById('chartContainer').style.display = 'block';
+
+            if (!myChart) {
+                const ctx = document.getElementById('myChart').getContext('2d');
+                myChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Suhu (°C)',
+                            data: chartData.temps,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        }, {
+                            label: 'Kelembaban (%)',
+                            data: chartData.humidities,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Suhu (°C)'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Kelembaban (%)'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                myChart.data.labels = chartData.labels;
+                myChart.data.datasets[0].data = chartData.temps;
+                myChart.data.datasets[1].data = chartData.humidities;
+                myChart.update();
+            }
+        }
+
+        // Simulasi data untuk demo
+        function startSimulation() {
+            setInterval(() => {
+                if (isConnected) {
+                    const temp = 25 + Math.random() * 10;
+                    const humidity = 60 + Math.random() * 20;
+                    
+                    updateTemperature(temp);
+                    updateHumidity(humidity);
+                    addDataPoint(temp, humidity);
+                }
+            }, 3000);
+        }
+
+        // Update topik display saat input berubah
+        document.getElementById('topicTemp').addEventListener('input', (e) => {
+            document.getElementById('tempTopic').textContent = 'Topik: ' + e.target.value;
+        });
+
+        document.getElementById('topicHumidity').addEventListener('input', (e) => {
+            document.getElementById('humidityTopic').textContent = 'Topik: ' + e.target.value;
+        });
+
+        document.getElementById('topicLamp').addEventListener('input', (e) => {
+            document.getElementById('lampTopic').textContent = 'Topik: ' + e.target.value;
+        });
+    </script>
+</body>
+</html>
