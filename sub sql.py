@@ -3,7 +3,7 @@ import mysql.connector
 import json
 
 # Konfigurasi broker MQTT
-BROKER = "192.168.0.106"
+BROKER = "192.168.225.215"
 PORT = 9001
 TOPIC_TEMP = "sensor1/temp"
 TOPIC_HUMID = "sensor1/humidity"
@@ -16,7 +16,7 @@ latest_humid = None
 
 # Konfigurasi MySQL
 db = mysql.connector.connect(
-    host="192.168.0.106",     # atau IP VM kalau MySQL di VM
+    host="192.168.225.215",     # atau IP VM kalau MySQL di VM
     user="firos",          # ganti user mysql
     password="1234",  # ganti password mysql
     database="sensor_db",

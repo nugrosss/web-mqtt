@@ -3,7 +3,7 @@ import time
 import random
 
 # Konfigurasi broker (WebSocket)
-BROKER = "192.168.0.106"   # IP Ubuntu server
+BROKER = "192.168.225.215"   # IP Ubuntu server
 PORT = 9001                  # Port WS (biasanya 9001 untuk Mosquitto WS)
 TOPIC_TEMP = "sensor1/temp"
 TOPIC_HUMID = "sensor1/humidity"
