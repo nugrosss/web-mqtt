@@ -398,6 +398,12 @@
                     🔌 Disconnect
                 </button>
             </div>
+
+            <div class="btn-group" style="margin-top: 15px;">
+                <button class="btn btn-success" onclick="gotoTabel()">
+                    📄 Lihat Tabel
+                </button>
+            </div>
         </div>
 
         <!-- Stats Grid -->
@@ -607,6 +613,10 @@
             if (notificationEnabled && temp > 32) {
                 showAlert('⚠️ Suhu tinggi terdeteksi: ' + temp.toFixed(1) + '°C');
             }
+        }
+
+        function gotoTabel() {
+            window.location.href = 'tabel.html'; // ganti path sesuai file kamu
         }
 
         function updateHumidity(humidity) {
