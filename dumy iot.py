@@ -29,7 +29,7 @@ try:
 
         print(f"Sent -> Temp: {temp_value}°C | Humidity: {humid_value}%")
 
-        time.sleep(1)
+        time.sleep(2)
 
 except KeyboardInterrupt:
     print("Stopped by user")
